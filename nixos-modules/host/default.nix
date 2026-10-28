@@ -171,6 +171,11 @@ in
           if guestConfig.microvm.declaredRunner.supportsNotifySocket
           then "notify"
           else "simple";
+        # This Type=notify waits for the guest's READY=1, which the runner's
+        # bridge sends from a child process, so it needs NotifyAccess=all
+        # whatever useNotifySockets says.
+        serviceConfig.NotifyAccess = lib.mkIf
+          guestConfig.microvm.declaredRunner.supportsNotifySocket "all";
         # Register with systemd-machined if the VM opts in
         wants = lib.optionals runner.registerWithMachined [
           "systemd-machined.service"
@@ -324,7 +329,11 @@ in
           Group = group;
           SyslogIdentifier = "microvm@%i";
           LimitNOFILE = 1048576;
-          NotifyAccess = "all";
+          # Only a Type=notify unit waits for the guest's readiness. Otherwise
+          # nothing reads the guest's notifications, and accepting them lets a
+          # RELOADING=1 move the unit into a reload state, in which a stop skips
+          # ExecStop and the guest gets no shutdown.
+          NotifyAccess = if config.microvm.host.useNotifySockets then "all" else "none";
           LimitMEMLOCK = "infinity";
         };
       };
